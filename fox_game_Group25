@@ -1,0 +1,219 @@
+# Course Name : Software Now
+# Course Code : HIT137
+# GROUP NAME : CAS/DAN GROUP-25
+# GROUP MEMBERS:
+#Kushal Mahajan - Student S383488
+#Darshan Veerabhadrappa Meti - Student S388441
+#Joanna Rivera - Student S392556
+#Anmol Singh - Student S385881
+
+# Importing Required Libraries
+import pygame
+import sys
+import random
+
+# Initialize Pygame
+pygame.init()
+WIDTH, HEIGHT = 800, 600
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("Fox's Quest")
+clock = pygame.time.Clock()
+FPS = 60
+
+# Load assets
+pygame.mixer.init()
+bg_music = r"C:\Users\Hp\Documents\Python\fight-for-the-future-336841.mp3"
+pygame.mixer.music.load(bg_music)
+pygame.mixer.music.play(-1)
+
+background = pygame.image.load("C:/Users/Hp/Documents/Python/game_background_by_flashpotatoes_d1w16fx-fullview.jpg").convert()
+background = pygame.transform.scale(background, (1600, 600))
+fox_img = pygame.image.load("C:/Users/Hp/Documents/Python/Game_Baddie_Fox_clip_art_medium.png").convert_alpha()
+fox_img = pygame.transform.scale(fox_img, (60, 60))
+projectile_img = pygame.image.load("C:/Users/Hp/Documents/Python/images.jpeg").convert_alpha()
+projectile_img = pygame.transform.scale(projectile_img, (20, 10))
+enemy_img = pygame.image.load("C:/Users/Hp/Documents/Python/depositphotos_658927184-stock-illustration-bald-eagle-flying-swoop-hand.jpg").convert_alpha()
+enemy_img = pygame.transform.scale(enemy_img, (60, 60))
+collectible_img = pygame.image.load("C:/Users/Hp/Documents/Python/depositphotos_6591604-stock-illustration-delicious-red-apple.jpg").convert_alpha()
+collectible_img = pygame.transform.scale(collectible_img, (30, 30))
+
+# Constants
+WHITE = (255, 255, 255)
+RED = (200, 0, 0)
+GREEN = (0, 200, 0)
+GROUND_Y = HEIGHT - 80
+FONT = pygame.font.SysFont("Arial", 24)
+
+# Classes
+class Player(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        self.image = fox_img
+        self.rect = self.image.get_rect(topleft=(x, y))
+        self.vel_y = 0
+        self.jumping = False
+        self.jump_count = 0
+        self.speed = 6
+        self.health = 100
+        self.lives = 3
+        self.projectiles = []
+
+    def update(self, keys):
+        dx = 0
+        if keys[pygame.K_LEFT]: dx = -self.speed
+        if keys[pygame.K_RIGHT]: dx = self.speed
+
+        if keys[pygame.K_SPACE] and self.jump_count < 2:
+            self.vel_y = -20
+            self.jumping = True
+            self.jump_count += 1
+
+        self.vel_y += 1
+        if self.vel_y > 15: self.vel_y = 15
+        self.rect.y += self.vel_y
+
+        if self.rect.bottom >= GROUND_Y:
+            self.rect.bottom = GROUND_Y
+            self.jumping = False
+            self.jump_count = 0
+
+        self.rect.x += dx
+
+        for projectile in self.projectiles[:]:
+            projectile.update()
+            if projectile.rect.x > WIDTH + 100:
+                self.projectiles.remove(projectile)
+
+    def draw(self, surface, camera_x):
+        surface.blit(self.image, (self.rect.x - camera_x, self.rect.y))
+        for projectile in self.projectiles:
+            projectile.draw(surface, camera_x)
+
+    def shoot(self):
+        self.projectiles.append(Projectile(self.rect.right, self.rect.centery))
+
+class Projectile(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        self.image = projectile_img
+        self.rect = self.image.get_rect(center=(x, y))
+        self.speed = 12
+        self.damage = 25
+
+    def update(self):
+        self.rect.x += self.speed
+
+    def draw(self, surface, camera_x):
+        surface.blit(self.image, (self.rect.x - camera_x, self.rect.y))
+
+class Enemy(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        self.image = enemy_img
+        self.rect = self.image.get_rect(topleft=(x, y))
+        self.health = 100
+        self.speed = random.randint(1, 3)
+        self.fly_height = random.choice([-2, -1, 1, 2])
+
+    def update(self, player):
+        if self.rect.x > player.rect.x:
+            self.rect.x -= self.speed
+        else:
+            self.rect.x += self.speed
+
+        self.rect.y += self.fly_height
+        if self.rect.y < 80 or self.rect.y > GROUND_Y - 100:
+            self.fly_height *= -1
+
+    def draw(self, surface, camera_x):
+        surface.blit(self.image, (self.rect.x - camera_x, self.rect.y))
+        pygame.draw.rect(surface, RED, (self.rect.x - camera_x, self.rect.y - 10, 60, 5))
+        pygame.draw.rect(surface, GREEN, (self.rect.x - camera_x, self.rect.y - 10, max(0, self.health * 0.6), 5))
+
+class Collectible(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        self.image = collectible_img
+        self.rect = self.image.get_rect(center=(x, y))
+
+    def draw(self, surface, camera_x):
+        surface.blit(self.image, (self.rect.x - camera_x, self.rect.y))
+
+# Initialize game objects
+player = Player(100, GROUND_Y - 60)
+enemies = [Enemy(random.randint(1000 + i * 600, 1600 + i * 600), random.randint(100, GROUND_Y - 150)) for i in range(6)]
+collectibles = [Collectible(random.randint(400, 2800), random.randint(100, GROUND_Y - 100)) for _ in range(15)]
+
+score = 0
+level_width = 3500
+camera_x = 0
+
+# Game loop
+running = True
+while running:
+    clock.tick(FPS)
+    camera_x = max(0, min(player.rect.x - WIDTH // 2, level_width - WIDTH))
+
+    rel_x = camera_x % background.get_width()
+    screen.blit(background, (-rel_x, 0))
+    if rel_x < WIDTH:
+        screen.blit(background, (background.get_width() - rel_x, 0))
+
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_f:
+                player.shoot()
+
+    keys = pygame.key.get_pressed()
+    player.update(keys)
+    player.draw(screen, camera_x)
+
+    for enemy in enemies[:]:
+        enemy.update(player)
+        enemy.draw(screen, camera_x)
+        for projectile in player.projectiles[:]:
+            if enemy.rect.colliderect(projectile.rect):
+                enemy.health -= projectile.damage
+                if projectile in player.projectiles:
+                    player.projectiles.remove(projectile)
+        if enemy.health <= 0:
+            enemies.remove(enemy)
+            score += 10
+
+    for enemy in enemies:
+        if player.rect.colliderect(enemy.rect):
+            if enemy.rect.x < player.rect.x + 10:
+                player.lives -= 1
+                player.health = 100
+                player.rect.topleft = (100, GROUND_Y - player.rect.height)
+                if player.lives <= 0:
+                    game_over_text = FONT.render(f"Game Over! Final Score: {score}", True, RED)
+                    screen.fill(WHITE)
+                    screen.blit(game_over_text, (WIDTH // 2 - game_over_text.get_width() // 2, HEIGHT // 2))
+                    pygame.display.update()
+                    pygame.time.wait(3000)
+                    running = False
+                break
+
+    for item in collectibles[:]:
+        item.draw(screen, camera_x)
+        if player.rect.colliderect(item.rect):
+            player.health = min(100, player.health + 20)
+            collectibles.remove(item)
+            score += 5
+
+    pygame.draw.rect(screen, RED, (20, 20, 200, 20))
+    pygame.draw.rect(screen, GREEN, (20, 20, player.health * 2, 20))
+    lives_text = FONT.render(f"Lives: {player.lives}", True, (0, 0, 0))
+    screen.blit(lives_text, (20, 50))
+    score_text = FONT.render(f"Score: {score}", True, (0, 0, 0))
+    screen.blit(score_text, (20, 80))
+
+    pygame.draw.rect(screen, (100, 50, 20), (0 - camera_x, GROUND_Y, level_width, HEIGHT - GROUND_Y))
+    pygame.display.update()
+
+pygame.quit()
+sys.exit()
+#end of game
